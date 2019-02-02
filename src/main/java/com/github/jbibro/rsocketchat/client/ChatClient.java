@@ -1,33 +1,33 @@
 package com.github.jbibro.rsocketchat.client;
 
 import java.io.IOException;
+import java.util.stream.Stream;
 
 import io.rsocket.Payload;
 import io.rsocket.RSocketFactory;
 import io.rsocket.transport.netty.client.TcpClientTransport;
 import io.rsocket.util.DefaultPayload;
-import jline.console.ConsoleReader;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
 @Slf4j
 public class ChatClient {
+
     public static void main(String[] args) throws IOException {
-        ConsoleReader console = new ConsoleReader();
-        String author = console.readLine("Who are you? > ");
-        ConsoleIterable consoleIterable = new ConsoleIterable(console, author + "> ");
+        Console console = new Console();
+        String author = console.readLine("Who are you?");
 
         RSocketFactory
             .connect()
-            .transport(TcpClientTransport.create(8080))
+            .transport(TcpClientTransport.create(8081))
             .start()
             .flatMapMany(rSocket ->
                 rSocket
                     .requestChannel(
                         Flux.concat(
                             Flux.just("joined"),
-                            Flux.fromIterable(consoleIterable)
+                            Flux.fromStream(Stream.generate(() -> console.readLine(author + ">")))
                         )
                             .map(msg -> String.join("-", author, msg))
                             .map(DefaultPayload::create)
@@ -37,9 +37,11 @@ public class ChatClient {
                     .filter(it -> !it.startsWith(author))
                     .doOnNext(it -> {
                         String[] msg = it.split("-");
-                        ConsoleUtil.printLine(console, msg[0], msg[1]);
+                        console.printLine(msg[0], msg[1]);
                     })
             )
             .blockLast();
     }
+
+
 }
