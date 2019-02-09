@@ -16,29 +16,21 @@ public class ChatClient {
 
     public static void main(String[] args) throws IOException {
         Console console = new Console();
-        String author = console.readLine("Who are you?");
-
+        String user = console.readLine("who are you?");
         RSocketFactory
             .connect()
             .transport(TcpClientTransport.create(8081))
             .start()
-            .flatMapMany(rSocket ->
-                rSocket
-                    .requestChannel(
-                        Flux.concat(
-                            Flux.just("joined"),
-                            Flux.fromStream(Stream.generate(() -> console.readLine(author + ">")))
-                        )
-                            .map(msg -> String.join("-", author, msg))
-                            .map(DefaultPayload::create)
-                            .subscribeOn(Schedulers.elastic())
-                    )
-                    .map(Payload::getDataUtf8)
-                    .filter(it -> !it.startsWith(author))
-                    .doOnNext(it -> {
-                        String[] msg = it.split("-");
-                        console.printLine(msg[0], msg[1]);
-                    })
+            .flatMapMany(rSocket -> rSocket
+                .requestStream(DefaultPayload.create(user))
+                .map(Payload::getDataUtf8)
+                .doOnNext(it -> console.printLine("unknown", it))
+                .zipWith(
+                    Flux
+                        .fromStream(Stream.generate(() -> console.readLine(">")))
+                        .flatMap(x -> rSocket.fireAndForget(DefaultPayload.create(x)))
+                        .subscribeOn(Schedulers.elastic())
+                )
             )
             .blockLast();
     }
